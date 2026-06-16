@@ -1,10 +1,19 @@
 import os
+import sys
 import subprocess
 import tempfile
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 from pathlib import Path
+
+# Add project root to sys.path for proper imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.tools.wiki_tools import write_wiki
 
 # --- 1. Gemini CLI Subprocess API Specification ---
 
@@ -180,9 +189,13 @@ def main():
             print(f"Processing: {raw_file.name}")
             raw_content = raw_file.read_text(encoding="utf-8")
 
-            # 3. Construct Prompt
-            main_prompt = f"""너는 제공된 시스템 지침을 따르는 위키 생성 Planner 에이전트야. 아래의 [Raw 데이터]를 분석하여 `docs/scheme/page_template.md` 스키마 양식에 완벽히 부합하는 마크다운 문서를 생성해줘. 
-특히 본문 작성 시, 다른 주요 CS 개념(예: os_memory, net_sliding_window, net_arq 등)과 연관성이 있다면 위키 고유의 상호 참조 문맥이 형성되도록 마크다운 내부 링크 형식(예: [[net_sliding_window]])을 본문 내용에 자연스럽게 녹여내어 작성해라.
+            # 3. Construct Prompt - Instruct to output ONLY markdown content
+            main_prompt = f"""너는 제공된 시스템 지침을 따르는 위키 생성 Planner 에이전트야. 아래의 [Raw 데이터]를 분석하여 `docs/scheme/page_template.md` 스키마 양식에 완벽히 부합하는 마크다운 문서를 생성해.
+
+**[매우 중요 제약사항]**
+1. 어떠한 대화형 안내 멘트, 서론, 결론, 부연 설명도 절대 출력하지 마라.
+2. 결과물은 반드시 ```markdown 과 ``` 로 감싸서 출력해라.
+3. 본문 작성 시, 다른 주요 CS 개념과 연관성이 있다면 위키 고유의 상호 참조 문맥이 형성되도록 마크다운 내부 링크 형식(예: [[net_sliding_window]])을 자연스럽게 녹여내어 작성해라.
 
 [참고 스키마 템플릿]:
 {page_template}
@@ -190,24 +203,39 @@ def main():
 [Raw 데이터]:
 {raw_content}"""
 
-            # 4. Request to Gemini CLI
+            # 4. Request to Gemini CLI - Added raw_output and yolo approval
             req = GeminiRequest(
                 prompt=main_prompt,
                 system_prompt=system_prompt,
-                approval_mode="plan",
-                output_format="text"
+                approval_mode="yolo",
+                output_format="text",
+                raw_output=True
             )
 
             result = run_gemini(req)
 
             if result.ok:
-                # 5. Save Output
-                # Use the first part of the filename for the wiki page name (handle .txt.txt etc)
-                wiki_filename = raw_file.name.split('.')[0] + ".md"
-                output_path = wiki_dir / wiki_filename
+                # 5. Save Output using wiki_tools for governance
+                wiki_page_name = raw_file.name.split('.')[0]
                 
-                output_path.write_text(result.stdout, encoding="utf-8")
-                print(f"Successfully created: {output_path}")
+                content = result.stdout.strip()
+                
+                # Extract content from markdown block using regex
+                match = re.search(r'```(?:markdown)?\s*\n(.*?)```', content, re.DOTALL)
+                if match:
+                    content = match.group(1).strip()
+                else:
+                    # Fallback: if no code block, try to find the start of frontmatter
+                    match = re.search(r'(---.*)', content, re.DOTALL)
+                    if match:
+                        content = match.group(1).strip()
+
+                success = write_wiki(wiki_page_name, content)
+                
+                if success:
+                    print(f"Successfully created/updated: {wiki_page_name}.md")
+                else:
+                    print(f"Failed to write wiki page: {wiki_page_name}")
             else:
                 print(f"Failed to process {raw_file.name}: {result.error}")
                 if result.stderr:

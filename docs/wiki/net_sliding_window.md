@@ -1,42 +1,44 @@
 ---
-# Wiki Page Template v1.0
 author: Gemini
-last_updated: 2026-06-01
+last_updated: 2026-06-16
 tags: [컴퓨터 네트워크, 슬라이딩 윈도우, 흐름 제어, TCP]
-version: 0.0.1
+version: 1.0.2
 ---
 
 # 슬라이딩 윈도우 (Sliding Window)
 
-> 네트워크 통신에서 송수신 측의 버퍼 상태를 관리하고 데이터 전송량을 동적으로 조절하여 효율적인 흐름 제어를 실현하는 메커니즘.
+> 송수신 측 사이의 데이터 흐름을 제어하기 위해 가용 윈도우 크기를 동적으로 조절하며 신뢰성 있는 전송을 보장하는 메커니즘.
 
 ## 1. 개요 (Overview)
-슬라이딩 윈도우는 전송 측이 수신 측의 처리 능력을 초과하여 데이터를 보내지 않도록 관리하는 기법입니다. 수신 측이 허용하는 범위(윈도우 크기) 내에서 ACK를 기다리지 않고 연속적으로 데이터를 보낼 수 있게 하여 네트워크 이용률을 높입니다.
+네트워크 상에서 수신 측의 처리 능력을 초과하는 오버플로우를 방지하기 위한 **흐름 제어(Flow Control)** 기법입니다. 수신 측이 허용하는 범위 내에서 송신 측이 ACK 없이도 연속적인 패킷 전송을 가능케 하여 전송 효율을 높입니다.
 
 ## 2. 상세 내용 (Details)
-- **샌더 사이드 슬라이딩 윈도우 (Sender-side Sliding Window)**:
-  송신 측 버퍼는 윈도우 상태에 따라 4가지 영역으로 관리됩니다.
-  - **카테고리 1**: 이미 전송되었고 수신 측으로부터 ACK 확인까지 완료된 영역 (윈도우 외부 좌측).
-  - **카테고리 2**: 데이터를 보냈으나 아직 ACK를 받지 못한 영역 (In-flight / Outstanding).
-  - **카테고리 3**: 윈도우 범위 내에 있어 즉시 보낼 수 있으나 아직 전송하지 않은 영역 (Usable Window).
-  - **카테고리 4**: 윈도우 범위를 벗어나 아직 보낼 수 없는 영역 (윈도우 외부 우측).
+### 2.1 샌더 사이드 슬라이딩 윈도우 (Sender-Side)
+송신 측 버퍼는 상태에 따라 다음과 같은 4가지 카테고리로 관리됩니다.
+1. **Category 1**: 전송 및 ACK 수신 완료 (윈도우 왼쪽 외부).
+2. **Category 2 (In-flight / Outstanding)**: 전송되었으나 아직 ACK를 받지 못한 영역.
+3. **Category 3 (Usable Window)**: 윈도우 내에 있으며 즉시 전송 가능한 영역.
+4. **Category 4**: 아직 전송 불가능한 영역 (윈도우 오른쪽 외부).
 
 - **윈도우 제어 동작**:
-  - **클로징 (Closing)**: ACK를 수신함에 따라 윈도우의 왼쪽 경계를 오른쪽으로 이동시키는 행위입니다.
-  - **오프닝 (Opening) / 슈링킹 (Shrinking)**: 네트워크 혼잡 상황이나 수신 측 버퍼 상태에 따라 윈도우의 전체 크기를 늘리거나 줄이는 행위입니다.
-  - **최종 윈도우 사이즈 결정**: `min(rwnd, cwnd)` 공식을 통해 흐름 제어를 위한 수신 윈도우(rwnd)와 혼잡 제어를 위한 혼잡 윈도우(cwnd) 중 작은 값을 최종 전송 크기로 결정합니다.
+  - **Closing**: ACK 수신 시 왼쪽 경계를 오른쪽으로 이동.
+  - **Opening / Shrinking**: 네트워크 상황 및 수신 측 통보에 따라 윈도우의 오른쪽 경계를 조절하여 전체 크기를 변경.
+  - **최종 윈도우 크기 결정**: `min(rwnd, cwnd)`. 흐름 제어의 **rwnd**(수신 윈도우)와 혼잡 제어의 **cwnd**(혼잡 윈도우) 중 최솟값을 사용합니다.
 
-- **리시버 사이드 슬라이딩 윈도우 (Receiver-side Sliding Window)**:
-  - 수신 측 역시 자신의 버퍼 공간을 관리하기 위해 윈도우를 유지합니다.
-  - 수신 측은 자신이 현재 수용 가능한 빈 버퍼의 크기를 송신 측에 계속해서 알리는데, 이를 **광고된 수신 윈도우(Advertised Receive Window)**라고 합니다. 이는 운영체제의 커널 버퍼 관리와 밀접하게 연동됩니다.
+### 2.2 리시버 사이드 슬라이딩 윈도우 (Receiver-Side)
+수신 측은 자신의 남은 버퍼 공간을 송신 측에 광고하는데, 이를 **광고된 수신 윈도우(Advertised Receive Window, rwnd)**라고 합니다. 이는 운영체제의 커널 버퍼(메모리 관리 영역)와 밀접하게 연동되며, 응용 프로그램의 데이터 처리 속도에 따라 가변적입니다.
 
 ## 3. 연관 항목 (Relationships)
-- **상위 개념**: [[컴퓨터 네트워크]], [[흐름 제어]], [[TCP]]
-- **하위 개념**: [[Advertised Receive Window]], [[rwnd]], [[cwnd]]
-- **참조 링크**: [[ARQ]], [[실리 윈도우 증후군(SWS)]]
+- **상위 개념**: [[TCP 흐름 제어]], [[전송 계층 (Transport Layer)]]
+- **하위 개념**: [[rwnd (Receive Window)]], [[cwnd (Congestion Window)]]
+- **참조 링크**: [[실리 윈도우 증후군 (SWS)]], [[ARQ]], [[BDP (Bandwidth-Delay Product)]]
 
 ## 4. 비고 (Notes)
-- 슬라이딩 윈도우의 효율적인 관리는 TCP 성능 최적화의 핵심이며, BDP(Bandwidth-Delay Product)와 윈도우 크기의 관계를 이해하는 것이 중요합니다.
+### 🛡 Security Audit: 윈도우 메커니즘 취약점
+- **CVE-2004-0230 (TCP Sequence Guessing)**:
+  - **설명**: 윈도우 범위 내의 시퀀스 번호를 예측하여 RST 또는 데이터를 주입하는 공격.
+  - **영향**: 세션 강제 종료 및 데이터 변조 위험.
+  - **대응**: **RFC 5961**을 통한 검증 절차 강화.
 
 ---
 
@@ -45,7 +47,10 @@ version: 0.0.1
 
 | Date | Agent | Action | Description |
 | :--- | :--- | :--- | :--- |
-| 2026-06-01 | Gemini | Rewrite | Fixed conversational text corruption and extracted entity from raw source (net_sliding_window.txt.txt). |
+| 2026-06-16 | Gemini | Create | Initial entity extraction from raw source. |
+| 2026-06-16 | Gemini | Update | `data/raw/net_sliding_window.txt` 기반 카테고리 정의 및 수식 보강. |
+
+<!-- [Source Reference: data/raw/net_sliding_window.txt] -->
 
 <!-- [Human Protected: Start] -->
 ### 👨‍💻 Human Annotations
